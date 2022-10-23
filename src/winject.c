@@ -191,7 +191,9 @@ int main() {
   char *cmdline, *parg, *pnext;
   DWORD flags=0, pid=0;
   int args_len=0, libcount=0, i=0;
+  unsigned int libpath_len = 0;
   char procname[MAX_PROCNAME_LEN];
+  char libpath[MAX_PATH+1];
   void *page;
   HANDLE hThread = NULL;
   HANDLE hProc = NULL;
@@ -225,7 +227,7 @@ int main() {
     if (parg[0] == '-' || parg[0] == '/' && parg[1] != 0 && parg[2] == 0) {
       if (parg[1] == '?' || parg[1] == 'h' || parg[1] == 'H') return usage();
       if (parg[1] == 'u' || parg[1] == 'U') {
-        flags = F_PID;
+        flags |= F_PID;
         break;
       }
       if (parg[1] == 's' || parg[1] == 'S') {
@@ -233,7 +235,7 @@ int main() {
         break;
       }
       if (parg[1] == 'p' || parg[1] == 'P') {
-        flags = F_NAME;
+        flags |= F_NAME;
         break;
       }
       if (parg[1] == 'x' || parg[1] == 'X') {
@@ -248,7 +250,7 @@ int main() {
       }
     }
 
-    if (lstrlenA(parg) > MAX_PATH-1) return fmt_error("Path length exceeds MAX_PATH (%1!u!): '%2'\r\n", (DWORD_PTR)MAX_PATH, (DWORD_PTR)parg, (DWORD_PTR)"");
+    if (lstrlenA(parg) > MAX_PATH) return fmt_error("Path length exceeds MAX_PATH (%1!u!): '%2'\r\n", (DWORD_PTR)MAX_PATH, (DWORD_PTR)parg, (DWORD_PTR)"");
     if (!FileExistsA(parg)) return fmt_error("File does not exist: '%1'\r\n", (DWORD_PTR)parg, (DWORD_PTR)"", (DWORD_PTR)"");
     libcount++;
  
@@ -333,10 +335,14 @@ int main() {
 
   fmt_print("Opened process PID:'%1!u!'\r\n", (DWORD_PTR)pid, (DWORD_PTR)"", (DWORD_PTR)"");
 
-  page = VirtualAllocEx(hProc, NULL, MAX_PATH, MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE);
+  page = VirtualAllocEx(hProc, NULL, MAX_PATH+1, MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE);
   if (!page) {
     fmt_error("kernel32:VirtualAllocEx() failed; error code = 0x%1!08X!\r\n", (DWORD_PTR)GetLastError(), (DWORD_PTR)"", (DWORD_PTR)"");
-    if (flags & F_FILE) CloseHandle(pi.hThread);
+    if (flags & F_FILE) {
+      ResumeThread(pi.hThread);
+      CloseHandle(pi.hThread);
+    }
+    else if (flags & F_SUSPEND) NtResumeProcess(hProc);
     CloseHandle(hProc);
     return 1;
   }
@@ -346,12 +352,42 @@ int main() {
     while (*parg == 0 || *parg == ' ' || *parg == '\t') {
       parg++;
     }
-    fmt_print("Loading module (%1!d!/%2!d!): '%3'\r\n", (DWORD_PTR)i, (DWORD_PTR)libcount, (DWORD_PTR)parg);
+    libpath_len = GetFullPathNameA(parg, MAX_PATH+1, libpath, NULL);
 
-    if (!WriteProcessMemory(hProc, page, parg, lstrlenA(parg)+1, NULL)) {
+    if (!libpath_len) {
+      fmt_error("kernel32:GetFullPathNameA() failed; error code = 0x%1!08X!\r\n", (DWORD_PTR)GetLastError(), (DWORD_PTR)"", (DWORD_PTR)"");
+      VirtualFreeEx(hProc, page, 0, MEM_RELEASE);
+      if (flags & F_FILE) {
+        ResumeThread(pi.hThread);
+        CloseHandle(pi.hThread);
+      }
+      else if (flags & F_SUSPEND) NtResumeProcess(hProc);
+      CloseHandle(hProc);
+      return 1;
+    }
+
+    if (libpath_len > MAX_PATH) {
+      fmt_error("Path length exceeds MAX_PATH (%1!u!): '%2'\r\n", (DWORD_PTR)MAX_PATH, (DWORD_PTR)libpath, (DWORD_PTR)"");
+      VirtualFreeEx(hProc, page, 0, MEM_RELEASE);
+      if (flags & F_FILE) {
+        ResumeThread(pi.hThread);
+        CloseHandle(pi.hThread);
+      }
+      else if (flags & F_SUSPEND) NtResumeProcess(hProc);
+      CloseHandle(hProc);
+      return 1;
+    }
+
+    fmt_print("Loading module (%1!d!/%2!d!): '%3'\r\n", (DWORD_PTR)i, (DWORD_PTR)libcount, (DWORD_PTR)libpath);
+
+    if (!WriteProcessMemory(hProc, page, libpath, libpath_len+1, NULL)) {
       fmt_error("kernel32:WriteProcessMemory() failed; error code = 0x%1!08X!\r\n", (DWORD_PTR)GetLastError(), (DWORD_PTR)"", (DWORD_PTR)"");
       VirtualFreeEx(hProc, page, 0, MEM_RELEASE);
-      if (flags & F_FILE) CloseHandle(pi.hThread);
+      if (flags & F_FILE) {
+        ResumeThread(pi.hThread);
+        CloseHandle(pi.hThread);
+      }
+      else if (flags & F_SUSPEND) NtResumeProcess(hProc);
       CloseHandle(hProc);
       return 1;
     }
@@ -360,7 +396,11 @@ int main() {
     if (!hThread) {
       fmt_error("kernel32:CreateRemoteThread() failed; error code = 0x%1!08X!\r\n", (DWORD_PTR)GetLastError(), (DWORD_PTR)"", (DWORD_PTR)"");
       VirtualFreeEx(hProc, page, 0, MEM_RELEASE);
-      if (flags & F_FILE) CloseHandle(pi.hThread);
+      if (flags & F_FILE) {
+        ResumeThread(pi.hThread);
+        CloseHandle(pi.hThread);
+      }
+      else if (flags & F_SUSPEND) NtResumeProcess(hProc);
       CloseHandle(hProc);
       return 1;
     }
@@ -369,7 +409,11 @@ int main() {
       fmt_error("kernel32:WaitForSingleObject() failed; error code = 0x%1!08X!\r\n", (DWORD_PTR)GetLastError(), (DWORD_PTR)"", (DWORD_PTR)"");
       CloseHandle(hThread);
       VirtualFreeEx(hProc, page, 0, MEM_RELEASE);
-      if (flags & F_FILE) CloseHandle(pi.hThread);
+      if (flags & F_FILE) {
+        ResumeThread(pi.hThread);
+        CloseHandle(pi.hThread);
+      }
+      else if (flags & F_SUSPEND) NtResumeProcess(hProc);
       CloseHandle(hProc);
       return 1;
     }
