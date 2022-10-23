@@ -282,6 +282,7 @@ int main() {
   else if (flags & F_PID) {
     parg = strip_quotes(parg);
     pid = _atoi(parg);
+    *procname = 0;
     if (!GetProcInfo(procname, &pid)) {
       return fmt_error("Could not find process with PID '%1!u!'\r\n", (DWORD_PTR)pid, (DWORD_PTR)"", (DWORD_PTR)"");
     }
