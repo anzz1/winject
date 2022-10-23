@@ -1,0 +1,6 @@
+
+LIBRARY "ntdll.dll"
+EXPORTS
+NtResumeProcess
+NtSuspendProcess
+RtlAdjustPrivilege
