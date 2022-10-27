@@ -33,7 +33,7 @@ void* __cdecl memset(void* dst, int val, size_t count) {
   return(start);
 }
 
-static __forceinline BOOL FileExistsA(const char* fileName) {
+static BOOL FileExistsA(const char* fileName) {
   DWORD fileAttr;
   fileAttr = GetFileAttributesA(fileName);
   if (INVALID_FILE_ATTRIBUTES == fileAttr) { // 0xFFFFFFFF (-1) 
@@ -55,18 +55,38 @@ static __forceinline BOOL FileExistsA(const char* fileName) {
   return TRUE;
 }
 
-static __forceinline char* _strrchr(char* s, char c) {
-  while(*s != 0) {
-    if(*s == c)
-      return s;
+static int __stricmp(const char* s1, const char* s2) {
+  char c1, c2;
+  do {
+    if (*s1 == 0 && *s2 == 0) return 0;
+    c1 = (*s1>64 && *s1<91) ? (*s1+32):*s1; // A-Z -> a-z
+    c2 = (*s2>64 && *s2<91) ? (*s2+32):*s2; // A-Z -> a-z
+    s1++; s2++;
+  } while (c1 == c2);
+  return (*s1 > *s2) ? 1 : -1;
+}
+static char* _strrchr(const char* s, char c) {
+  char *p = 0;
+  while (*s != 0) {
+    if (*s == c)
+      p = (char*)s;
     s++;
   }
-  return 0;
+  return p;
 }
-
-static __forceinline int _atoi(char* s) {
+static unsigned int _strlen(const char* s) {
+  unsigned int i = 0;
+  while (s[i] != 0) i++;
+  return i;
+}
+static char* _strcpy(char* dst, const char* src) {
+  while (*src != 0) *dst++ = *src++;
+  *dst = 0;
+  return dst;
+}
+static int _atoi(char* s) {
   int a = 0, b = 0, x = 0, i = 0, len = 0;
-  len = lstrlenA(s);
+  len = _strlen(s);
   for (x = 0; x < len; x++) {
     if (s[x] == 48) continue;
     if (s[x] > 48 && s[x] < 58) {
@@ -84,11 +104,13 @@ static __forceinline int _atoi(char* s) {
 }
 
 static BOOL GetProcInfo(char* process, DWORD* pid) {
-  PROCESSENTRY32 lppe = {0};
+  PROCESSENTRY32 lppe;
   char* pname;
+  HANDLE hSnapshot;
 
-  HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+  hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
   if (hSnapshot) {
+    memset(&lppe, 0, sizeof(PROCESSENTRY32));
     lppe.dwSize = sizeof(PROCESSENTRY32);
     if (Process32First(hSnapshot,&lppe)) {
       do {
@@ -100,10 +122,10 @@ static BOOL GetProcInfo(char* process, DWORD* pid) {
         }
         if (*process == 0) {
           if(*pid == lppe.th32ProcessID) {
-            lstrcpyA(process, pname);
+            _strcpy(process, pname);
             break;
           }
-        } else if(!lstrcmpiA(process, pname)) {
+        } else if(!__stricmp(process, pname)) {
           *pid=lppe.th32ProcessID;
           break;
         }
@@ -114,7 +136,7 @@ static BOOL GetProcInfo(char* process, DWORD* pid) {
   return (*pid != 0 && *process != 0);
 }
 
-static __forceinline void chrreplace(char* s, char a, char b) {
+static void chrreplace(char* s, char a, char b) {
   while (*s != 0) {
     if(*s == a)
       *s = b;
@@ -153,7 +175,7 @@ static char* strip_quotes(char* s) {
 
 static void _ioprint(DWORD std_handle, const char* cbuf) {
   DWORD u = 0;
-  WriteFile(GetStdHandle(std_handle), cbuf, lstrlenA(cbuf), &u, 0);
+  WriteFile(GetStdHandle(std_handle), cbuf, _strlen(cbuf), &u, 0);
 }
 
 static __forceinline void print(const char* cbuf) {
@@ -174,11 +196,11 @@ static void _fmt_ioprint(DWORD std_handle, const char *fmt, DWORD_PTR arg1, DWOR
   }
 }
 
-static __forceinline void fmt_print(const char *fmt, DWORD_PTR arg1, DWORD_PTR arg2, DWORD_PTR arg3) {
+__forceinline static void fmt_print(const char *fmt, DWORD_PTR arg1, DWORD_PTR arg2, DWORD_PTR arg3) {
   _fmt_ioprint(STDOUT, fmt, arg1, arg2, arg3);
 }
 
-static __forceinline int fmt_error(const char *fmt, DWORD_PTR arg1, DWORD_PTR arg2, DWORD_PTR arg3) {
+__forceinline static int fmt_error(const char *fmt, DWORD_PTR arg1, DWORD_PTR arg2, DWORD_PTR arg3) {
   _fmt_ioprint(STDERR, fmt, arg1, arg2, arg3);
   return 1;
 }
@@ -197,24 +219,27 @@ int main() {
   void *page;
   HANDLE hThread = NULL;
   HANDLE hProc = NULL;
-  STARTUPINFO si = {0};
-  PROCESS_INFORMATION pi = {0};
+  STARTUPINFO si;
+  PROCESS_INFORMATION pi;
   DWORD dwErr = 0;
   //TOKEN_PRIVILEGES tkp;
   //HANDLE hToken;
+
+  memset(&si, 0, sizeof(STARTUPINFO));
+  memset(&pi, 0, sizeof(PROCESS_INFORMATION));
 
   cmdline = GetCommandLineA();
   if(!cmdline) return fmt_error("kernel32:GetCommandLineA() failed; error code = 0x%1!08X!\r\n", (DWORD_PTR)GetLastError(), (DWORD_PTR)"", (DWORD_PTR)"");
 
   parg = get_next_arg(cmdline, FALSE);
-  args_len = lstrlenA(parg);
+  args_len = _strlen(parg);
   if (!args_len) return usage();
   if (args_len > MAX_CMDLINE_LEN) return error("Command line is too long > 4096\r\n");
 
   //print(cmdline);
   //print("\r\n");
 
-  lstrcpyA(argv, parg);
+  _strcpy(argv, parg);
 
   parg = argv;
 
@@ -250,7 +275,7 @@ int main() {
       }
     }
 
-    if (lstrlenA(parg) > MAX_PATH) return fmt_error("Path length exceeds MAX_PATH (%1!u!): '%2'\r\n", (DWORD_PTR)MAX_PATH, (DWORD_PTR)parg, (DWORD_PTR)"");
+    if (_strlen(parg) > MAX_PATH) return fmt_error("Path length exceeds MAX_PATH (%1!u!): '%2'\r\n", (DWORD_PTR)MAX_PATH, (DWORD_PTR)parg, (DWORD_PTR)"");
     if (!FileExistsA(parg)) return fmt_error("File does not exist: '%1'\r\n", (DWORD_PTR)parg, (DWORD_PTR)"", (DWORD_PTR)"");
     libcount++;
  

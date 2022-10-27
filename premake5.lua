@@ -1,27 +1,29 @@
 workspace "winject"
    configurations { "Release" }
-   platforms { "Win32", "Win64" }
+   platforms { "Win32", "x64" }
    location "build"
    objdir ("build/obj")
    buildlog ("build/log/%{prj.name}.log")
-
+   
    characterset ("MBCS")
    staticruntime "Off"
-   omitframepointer "On"
+   exceptionhandling "Off"
+   floatingpoint "Fast"
+   intrinsics "On"
    flags { "NoBufferSecurityCheck", "NoIncrementalLink", "NoManifest", "NoPCH", "NoRuntimeChecks", "OmitDefaultLibrary" }
-
+   buildoptions { "/kernel" }
+   linkoptions { "/SAFESEH:NO" }
+   
    filter "configurations:Release"
       defines "NDEBUG"
       optimize "Speed"
       symbols "Off"
-
+   
    filter "platforms:Win32"
-      architecture "x32"
-	  libdirs { "build/lib/x86" }
-
-   filter "platforms:Win64"
+      architecture "x86"
+   
+   filter "platforms:x64"
       architecture "x64"
-	  libdirs { "build/lib/x64" }
 
 project "ntdll_lib_stub"
    kind "SharedLib"
@@ -31,7 +33,7 @@ project "ntdll_lib_stub"
    targetdir "build/obj"
    files { "src/ntdll_lib_stub.c" }
    files { "src/ntdll.def" }
-   linkoptions { '/entry:"DllMain"' }
+   entrypoint "DllMain"
 
 project "winject"
    kind "ConsoleApp"
@@ -39,9 +41,9 @@ project "winject"
    targetextension ".exe"
    targetdir "bin"
    files { "src/winject.c" }
-   linkoptions { '/entry:"main"' }
+   entrypoint "main"
    dependson { "ntdll_lib_stub" }
    filter "platforms:Win32"
       targetname "winject32"
-   filter "platforms:Win64"
+   filter "platforms:x64"
       targetname "winject64"
