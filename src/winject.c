@@ -157,7 +157,9 @@ __forceinline static char* get_next_arg(char* s, BOOL write) {
 }
 
 __forceinline static char* strip_quotes(char* s) {
-  return __strreplacechr(s, '\"', 0);;
+  while (*s != 0 && *s == '\"')
+    s++;
+  return __strreplacechr(s, '\"', 0);
 }
 
 __forceinline static void _ioprint(DWORD std_handle, const char* cbuf) {
