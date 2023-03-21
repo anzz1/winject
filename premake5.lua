@@ -13,7 +13,7 @@ workspace "winject"
    rtti "Off"
    flags { "NoBufferSecurityCheck", "NoIncrementalLink", "NoManifest", "NoPCH", "NoRuntimeChecks", "OmitDefaultLibrary" }
    buildoptions { "/kernel" }
-   linkoptions { "/NODEFAULTLIB", "/SAFESEH:NO", "/EMITPOGOPHASEINFO", "/RELEASE", "/DEBUG:NONE" }
+   linkoptions { "/SAFESEH:NO", "/EMITPOGOPHASEINFO", "/RELEASE", "/DEBUG:NONE" }
 
    filter "configurations:Release"
       runtime "Release"
