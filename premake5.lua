@@ -4,24 +4,26 @@ workspace "winject"
    location "build"
    objdir ("build/obj")
    buildlog ("build/log/%{prj.name}.log")
-   
+
    characterset ("MBCS")
    staticruntime "Off"
    exceptionhandling "Off"
    floatingpoint "Fast"
    intrinsics "On"
+   rtti "Off"
    flags { "NoBufferSecurityCheck", "NoIncrementalLink", "NoManifest", "NoPCH", "NoRuntimeChecks", "OmitDefaultLibrary" }
    buildoptions { "/kernel" }
-   linkoptions { "/SAFESEH:NO" }
-   
+   linkoptions { "/NODEFAULTLIB", "/SAFESEH:NO", "/EMITPOGOPHASEINFO", "/RELEASE", "/DEBUG:NONE" }
+
    filter "configurations:Release"
+      runtime "Release"
       defines "NDEBUG"
       optimize "Speed"
       symbols "Off"
-   
+
    filter "platforms:Win32"
       architecture "x86"
-   
+
    filter "platforms:x64"
       architecture "x64"
 
