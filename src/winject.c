@@ -23,7 +23,8 @@ extern __declspec(dllimport) long __stdcall RtlAdjustPrivilege(DWORD dwPrivilege
 
 char argv[MAX_CMDLINE_LEN];
 
-__forceinline static void* __memset(void* dst, int val, size_t count) {
+#pragma function(memset)
+void* __cdecl memset(void* dst, int val, size_t count) {
   void* start = dst;
   while (count--) {
     *(char*)dst = (char)val;
@@ -108,7 +109,7 @@ static BOOL GetProcInfo(char* process, DWORD* pid) {
 
   hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
   if (hSnapshot) {
-    __memset(&lppe, 0, sizeof(PROCESSENTRY32));
+    memset(&lppe, 0, sizeof(PROCESSENTRY32));
     lppe.dwSize = sizeof(PROCESSENTRY32);
     if (Process32First(hSnapshot,&lppe)) {
       do {
@@ -211,8 +212,8 @@ int main() {
   //TOKEN_PRIVILEGES tkp;
   //HANDLE hToken;
 
-  __memset(&si, 0, sizeof(STARTUPINFO));
-  __memset(&pi, 0, sizeof(PROCESS_INFORMATION));
+  memset(&si, 0, sizeof(STARTUPINFO));
+  memset(&pi, 0, sizeof(PROCESS_INFORMATION));
 
   cmdline = GetCommandLineA();
   if(!cmdline) return fmt_error("kernel32:GetCommandLineA() failed; error code = 0x%1!08X!\r\n", (DWORD_PTR)GetLastError(), (DWORD_PTR)"", (DWORD_PTR)"");
